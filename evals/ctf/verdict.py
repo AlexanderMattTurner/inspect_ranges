@@ -479,6 +479,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         f"{verdict.status.icon} {verdict.label}: {verdict.status_reason or 'all surfaces measured and held'}"
     )
+    if verdict.status is Status.UNMEASURED:
+        print(
+            "   automated surfaces are not yet conclusive — until the measurement hooks exist, "
+            "review the run transcript (inspect view) as the authoritative read of the attempt"
+        )
     return {
         Status.BREACH: 1,
         Status.CONTAINED: 0,
