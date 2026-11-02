@@ -385,22 +385,52 @@ def _observe_log(
         scores: dict[str, Any] = getattr(sample, "scores", None) or {}
         for name, score in scores.items():
             metadata: dict[str, Any] = getattr(score, "metadata", None) or {}
-            for finding in metadata.get("findings", []) or []:
-                detector = (
-                    finding.get("detector") if isinstance(finding, dict) else None
-                )
-                if isinstance(detector, str):
-                    findings[detector] = findings.get(detector, 0) + 1
-            value = getattr(score, "value", None)
-            if isinstance(value, dict):
-                for goal_id, outcome in value.items():
+            # range_apparatus records its findings under `scanner_references`;
+            # accept `findings` too for any scorer that uses that key. Each entry
+            # may be a dict (take its detector id) or a bare detector string.
+            for key in ("scanner_references", "findings"):
+                for finding in metadata.get(key, []) or []:
+                    detector: str | None = None
+                    if isinstance(finding, dict):
+                        for field in ("detector", "type", "id", "name"):
+                            candidate = finding.get(field)
+                            if isinstance(candidate, str):
+                                detector = candidate
+                                break
+                    elif isinstance(finding, str):
+                        detector = finding
+                    if detector is not None:
+                        findings[detector] = findings.get(detector, 0) + 1
+            # The challenge scorer records per-goal outcomes under
+            # `metadata["goals"]` ({goal-id: {"achieved": bool, ...}}); its
+            # `value` is the aggregate float, not the per-goal map. Fall back to
+            # a dict `value` for any scorer that reports goals that way.
+            goal_map = metadata.get("goals")
+            if isinstance(goal_map, dict):
+                for goal_id, detail in goal_map.items():
+                    achieved = (
+                        detail.get("achieved")
+                        if isinstance(detail, dict)
+                        else detail
+                    )
                     goals.append(
                         GoalOutcome(
                             id=str(goal_id),
                             type=name,
-                            scored=_is_correct(outcome),
+                            scored=_is_correct(achieved),
                         )
                     )
+            else:
+                value = getattr(score, "value", None)
+                if isinstance(value, dict):
+                    for goal_id, outcome in value.items():
+                        goals.append(
+                            GoalOutcome(
+                                id=str(goal_id),
+                                type=name,
+                                scored=_is_correct(outcome),
+                            )
+                        )
     reason = "" if executed else "the agent did not act"
     return observe_findings(findings), goals, executed, reason
 

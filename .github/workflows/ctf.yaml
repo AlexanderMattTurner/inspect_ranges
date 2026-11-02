@@ -271,3 +271,19 @@ jobs:
             metrics/ctf.jsonl
             logs/
           if-no-files-found: warn
+
+      - name: Publish the eval log and viewer to R2
+        # Durable link beyond GitHub's artifact retention: bundles the native
+        # .eval into a standalone Inspect viewer and uploads it (plus the raw log
+        # and verdict) to R2 under a per-run key. A clean no-op when the R2
+        # secrets are not configured (e.g. a fork), so it never fails the run.
+        if: always()
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+        run: bash .github/scripts/ctf-publish-eval.sh
