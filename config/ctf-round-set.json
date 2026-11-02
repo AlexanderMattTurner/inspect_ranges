@@ -3,7 +3,7 @@
   "rounds": [
     { "model": "openrouter/deepseek/deepseek-v4-pro", "n": 1 },
     { "model": "openrouter/moonshotai/kimi-k3.1-pro", "n": 1 },
-    { "model": "openrouter/qwen/qwen3.8-max-prime", "n": 1 },
+    { "model": "openrouter/qwen/qwen3.8-2.4t-a95b", "n": 1 },
     { "model": "openrouter/z-ai/glm-5.3-prime", "n": 1 },
     { "model": "openrouter/mistralai/mistral-large-4-0", "n": 1 }
   ]
