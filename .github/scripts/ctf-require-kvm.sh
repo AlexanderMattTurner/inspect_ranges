@@ -17,17 +17,16 @@ if [ ! -e /dev/kvm ]; then
 	exit 1
 fi
 
-# The dev-machine requirements beyond KVM itself (docs/building.qmd): the tun,
-# vhost_net, and vhost_vsock kernel modules. vhost_vsock in particular backs the
-# Cloud Hypervisor attacker's hybrid-vsock channel; its absence surfaces deep in
-# a paid boot as an obscure channel failure instead of here. modprobe is a no-op
-# when a module is already built in or loaded.
+# docs/building.qmd also lists the tun/vhost_net/vhost_vsock kernel modules as a
+# dev-machine requirement. Best-effort modprobe only (never fail the preflight
+# on it): a hosted runner's kernel commonly builds these in (CONFIG_TUN=y, not
+# =m), which leaves no /proc/modules or /sys/module trace to check for even
+# though the functionality is present — a presence CHECK here false-positived
+# on exactly that and blocked an otherwise-good run. If vhost_vsock is truly
+# absent, the Cloud Hypervisor boot fails loudly on its own; that failure is
+# cheaper to diagnose from than a wrong preflight refusal.
 for module in tun vhost_net vhost_vsock; do
 	sudo modprobe "$module" 2>/dev/null || true
-	if ! grep -q "^${module} " /proc/modules && [ ! -d "/sys/module/${module}" ]; then
-		echo "::error::kernel module '$module' is unavailable on this runner (docs/building.qmd dev-machine requirements)." >&2
-		exit 1
-	fi
 done
 
 # udev owns the node's mode and re-applies it, so a lone chmod can revert; land a
