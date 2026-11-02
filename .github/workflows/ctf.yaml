@@ -78,7 +78,15 @@ jobs:
         run: uv sync --group dev
 
       - name: Install image-build tooling (qemu-utils, libguestfs-tools)
-        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends qemu-utils libguestfs-tools
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends qemu-utils libguestfs-tools
+          # libguestfs/supermin builds its appliance from the host kernel and
+          # must read it; Ubuntu ships /boot/vmlinuz-* mode 0600 (root only),
+          # and the derive runs as the unprivileged runner user, so supermin
+          # fails with "exited with error status 1". Make the kernel readable —
+          # the standard libguestfs-on-CI fix (verified locally: a 0600 kernel
+          # reproduces the failure, +r clears it and the derive completes).
+          sudo chmod +r /boot/vmlinuz-* || true
 
       - name: Install the pinned Go toolchain (builds the daemon artifact)
         # `daemon-bundle` builds the control-channel daemon and refuses any Go
