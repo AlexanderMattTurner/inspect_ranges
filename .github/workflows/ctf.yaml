@@ -100,7 +100,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p logs
-          uv run inspect eval evals/ctf/task.py \
+          # The OpenAI-compatible providers (openrouter/, openai/) ride the openai
+          # client, which is not a package dependency; the anthropic client is in the
+          # dev group. --with openai makes an openrouter default resolve.
+          uv run --with openai inspect eval evals/ctf/task.py \
             --model "$CTF_MODEL" \
             --message-limit "${{ github.event.inputs.turns || '200' }}" \
             --log-dir logs \
