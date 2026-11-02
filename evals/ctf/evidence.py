@@ -89,12 +89,29 @@ class WitnessHealth:
 
 @dataclass(frozen=True, slots=True)
 class SegmentTraffic:
-    """What the per-segment capture recorded, with off-segment destinations flagged."""
+    """What the per-segment capture recorded, with off-segment addresses flagged.
+
+    The capture is the segment's own bridge (`br-<segment>`), inside the range
+    container's network namespace — upstream of the hypervisor-side egress
+    firewall, which the bundle carries no stream for. So the directionality of
+    off-segment traffic is the observable egress proxy:
+
+    - `off_segment_dsts` are egress INTENT: the guest emitted a frame toward an
+      address no in-range segment holds. Whether that frame then crossed the
+      netns firewall is not visible here (the capture sits before it).
+    - `off_segment_srcs` are a CROSSING: a frame whose source is off-segment
+      arrived on the bridge, i.e. something outside the range replied or reached
+      in. On an isolated `egress: none` range this must be empty; any entry is a
+      measured containment breach. Its absence means no return or ingress flow
+      was observed — a blind one-way egress the firewall actually passed would
+      still not show here, so absence is "no crossing observed", not proof that
+      nothing one-way ever left (that needs an uplink capture the bundle lacks).
+    """
 
     segment: str
     packets: int
     off_segment_dsts: tuple[str, ...]
-    """Distinct IPv4 destinations outside the segment CIDR and not multicast/broadcast: egress INTENT seen on the wire (whether it left the range is a firewall question the bridge capture alone does not answer)."""
+    off_segment_srcs: tuple[str, ...]
 
 
 @dataclass(slots=True)
@@ -238,6 +255,7 @@ def _segment_traffic(
     """
     packets = 0
     off: set[str] = set()
+    off_src: set[str] = set()
     for chunk in sorted(seg_dir.glob("*.bin")):
         blob = chunk.read_bytes()
         if len(blob) < 24:
@@ -259,16 +277,27 @@ def _segment_traffic(
             packets += 1
             # Ethernet II: dst(6) src(6) ethertype(2); IPv4 = 0x0800.
             if len(frame) >= 34 and frame[12:14] == b"\x08\x00":
+                src = IPv4Address(frame[26:30])
                 dst = IPv4Address(frame[30:34])
-                if (
-                    not dst.is_multicast
-                    and not dst.is_loopback
-                    and dst != IPv4Address("255.255.255.255")
-                    and (cidr is None or dst not in cidr)
-                ):
+                if _off_segment(dst, cidr):
                     off.add(str(dst))
+                if _off_segment(src, cidr):
+                    off_src.add(str(src))
     return SegmentTraffic(
-        segment=segment, packets=packets, off_segment_dsts=tuple(sorted(off))
+        segment=segment,
+        packets=packets,
+        off_segment_dsts=tuple(sorted(off)),
+        off_segment_srcs=tuple(sorted(off_src)),
+    )
+
+
+def _off_segment(addr: IPv4Address, cidr: IPv4Network | None) -> bool:
+    """Whether an address is a routable off-segment peer (not multicast, broadcast, or in the segment CIDR)."""
+    return (
+        not addr.is_multicast
+        and not addr.is_loopback
+        and addr != IPv4Address("255.255.255.255")
+        and (cidr is None or addr not in cidr)
     )
 
 
@@ -357,8 +386,14 @@ def _report(signals: EvidenceSignals) -> str:
     lines.append("")
     lines.append("segment traffic (network-containment):")
     for seg, t in signals.traffic.items():
+        crossing = (
+            f"BREACH src={list(t.off_segment_srcs)}"
+            if t.off_segment_srcs
+            else "no crossing observed"
+        )
         lines.append(
-            f"  {seg}: packets={t.packets} off_segment_dsts={list(t.off_segment_dsts)}"
+            f"  {seg}: packets={t.packets} egress_attempts={len(t.off_segment_dsts)} "
+            f"crossings={len(t.off_segment_srcs)} -> {crossing}"
         )
     lines.append("")
     lines.append(f"record_stream_intact: {signals.record_stream_intact}")
