@@ -55,7 +55,10 @@ jobs:
     # mentions the marker in its body or a diff never launches a paid run.
     if: github.event_name != 'push' || startsWith(github.event.head_commit.message, '[breakout-ctf]')
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # The agent's wall-clock (--time-limit below) matches the reference harness's
+    # 400 turns x 48 s/turn = 19200 s (~320 min); the job timeout sits above that
+    # plus build/derive/grade/upload, under the hosted runner's 6 h hard cap.
+    timeout-minutes: 350
     strategy:
       # Measure both postures each run: white-box (source + brief delivered) and
       # black-box (neither). A dispatch `whitebox` input pins both legs to one
@@ -236,7 +239,7 @@ jobs:
           uv run --with openai inspect eval evals/ctf/task.py \
             --model "$CTF_MODEL" \
             --message-limit "${{ github.event.inputs.turns || '400' }}" \
-            --time-limit 5400 \
+            --time-limit 19200 \
             --log-dir logs \
             --log-format eval
           log="$(ls -t logs/*.eval | head -1)"
