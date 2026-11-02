@@ -80,6 +80,20 @@ jobs:
       - name: Install image-build tooling (qemu-utils, libguestfs-tools)
         run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends qemu-utils libguestfs-tools
 
+      - name: Install the pinned Go toolchain (builds the daemon artifact)
+        # `daemon-bundle` builds the control-channel daemon and refuses any Go
+        # but the exact pin (src/inspect_ranges/_channel/bundle.py: GO_PIN), for
+        # a reproducible artifact digest; the runner's PATH Go is newer. Install
+        # the pin where inspect_ranges looks (~/.local/go-toolchains/<pin>), the
+        # same toolchain and path as the Build workflow's test job.
+        run: |
+          curl -fsSL -o /tmp/go.tgz https://go.dev/dl/go1.23.6.linux-amd64.tar.gz
+          echo "9379441ea310de000f33a4dc767bd966e72ab2826270e038e78b2c53c2e7802d  /tmp/go.tgz" | sha256sum -c
+          mkdir -p "$HOME/.local/go-toolchains"
+          tar -C "$HOME/.local/go-toolchains" -xzf /tmp/go.tgz
+          mv "$HOME/.local/go-toolchains/go" "$HOME/.local/go-toolchains/go1.23.6"
+          "$HOME/.local/go-toolchains/go1.23.6/bin/go" version
+
       - name: Derive the ubuntu-noble golden
         # The range's `web` host boots the `ubuntu-noble` catalog golden, which
         # is empty on a fresh runner (the image cache is per-run, never
