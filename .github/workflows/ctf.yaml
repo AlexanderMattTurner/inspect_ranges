@@ -32,7 +32,7 @@ on:
     - cron: "11 11 * * 1"
   push:
     # Iterate from a feature branch: a push runs the CTF only when the head
-    # commit subject carries the [breakout-ctf] marker (the job `if` below),
+    # commit subject STARTS WITH the [breakout-ctf] marker (the job `if` below),
     # so ordinary pushes never trigger a paid run. workflow_dispatch and the
     # schedule register only from the default branch.
     branches:
@@ -50,8 +50,10 @@ permissions:
 
 jobs:
   breakout-ctf:
-    # A push runs the paid CTF only on a commit explicitly marked [breakout-ctf].
-    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[breakout-ctf]')
+    # A push runs the paid CTF only when the head commit SUBJECT starts with the
+    # [breakout-ctf] marker. startsWith (not contains) so a commit that merely
+    # mentions the marker in its body or a diff never launches a paid run.
+    if: github.event_name != 'push' || startsWith(github.event.head_commit.message, '[breakout-ctf]')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:

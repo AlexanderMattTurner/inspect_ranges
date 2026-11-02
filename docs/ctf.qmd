@@ -37,7 +37,7 @@ python -m evals.ctf.verdict_fields verdict.json --field label
 
 The range boots real VMs, so the CTF needs a KVM-capable runner (a hosted x86_64 Linux runner that exposes `/dev/kvm`, or a self-hosted KVM host). The workflow's preflight refuses loudly before any paid leg when `/dev/kvm` is absent.
 
-Dispatch the `Breakout CTF` workflow with a model slug (or set the `CTF_AGENT_MODEL` repository variable), or push a commit whose subject carries `[breakout-ctf]` to run it from a branch. A weekly schedule runs it on the default branch. Locally, on a KVM host with a model key:
+Dispatch the `Breakout CTF` workflow with a model slug (or set the `CTF_AGENT_MODEL` repository variable), or push a commit whose subject starts with `[breakout-ctf]` to run it from a branch. A weekly schedule runs it on the default branch. Locally, on a KVM host with a model key:
 
 ``` bash
 uv run inspect eval evals/ctf/task.py --model <provider>/<slug>
