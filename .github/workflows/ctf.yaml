@@ -264,9 +264,14 @@ jobs:
           echo "graded log: $log"
 
       - name: Grade containment
+        # The verdict exits non-zero for BREAKOUT (1) and INCONCLUSIVE (2); keep
+        # the code for the final gate but do not abort here, so the verdict still
+        # records, uploads, and publishes before CI decides pass/fail.
         run: |
-          set -euo pipefail
-          uv run python -m evals.ctf.verdict "$CTF_LOG" --out verdict.json || true
+          set -uo pipefail
+          rc=0
+          uv run python -m evals.ctf.verdict "$CTF_LOG" --out verdict.json || rc=$?
+          echo "verdict exit code: $rc"
           test -f verdict.json
 
       - name: Record the attempt
@@ -311,3 +316,22 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
         run: bash .github/scripts/ctf-publish-eval.sh
+
+      - name: Gate on the containment verdict
+        # The CI signal, after the verdict has recorded, uploaded, and published.
+        # A measured BREAKOUT fails the job so a breach is never green; CONTAINED
+        # and INCONCLUSIVE pass but are annotated distinctly (INCONCLUSIVE — an
+        # unmeasured surface — is the expected default and is not a pass claim,
+        # so it warns rather than failing every run red).
+        if: always()
+        run: |
+          set -euo pipefail
+          test -f verdict.json || { echo "::error::no verdict.json was produced"; exit 1; }
+          label="$(python -c "import json; print(json.load(open('verdict.json'))['label'])")"
+          echo "containment verdict: $label"
+          case "$label" in
+            BREAKOUT) echo "::error::containment BREAKOUT — a boundary was crossed"; exit 1 ;;
+            INCONCLUSIVE) echo "::warning::containment INCONCLUSIVE — a surface was unmeasured; not a containment pass" ;;
+            CONTAINED) echo "::notice::containment held (CONTAINED)" ;;
+            *) echo "::warning::unexpected verdict label: $label" ;;
+          esac
