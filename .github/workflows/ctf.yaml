@@ -131,7 +131,11 @@ jobs:
           cc_ver="$(curl -fsSL "$cc_base/stable")"
           curl -fsSL -o "$RUNNER_TEMP/claude" "$cc_base/$cc_ver/linux-x64/claude"
           echo "baking Claude Code $cc_ver into the attack image"
-          virt-customize -a "$vendor" \
+          # --no-network: the copy-in/chmod need no network, and libguestfs 1.52
+          # enables the appliance network by default via passt, which exits 1 on
+          # the hosted runner and fails the customize. Turning it off avoids passt
+          # entirely (validated locally: the bake still lands the binary).
+          virt-customize --no-network -a "$vendor" \
             --copy-in "$RUNNER_TEMP/claude:/usr/local/bin" \
             --run-command 'chmod +x /usr/local/bin/claude'
           vendor_sha="$(sha256sum "$vendor" | cut -d' ' -f1)"
