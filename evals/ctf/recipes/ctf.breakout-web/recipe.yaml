@@ -1,5 +1,0 @@
-name: ctf.breakout-web
-version: "1"
-entrypoint: run.sh
-mode: online
-inputs: {}

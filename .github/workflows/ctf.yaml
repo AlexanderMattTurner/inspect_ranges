@@ -201,16 +201,11 @@ jobs:
           echo "INSPECT_RANGES_IMAGE_CACHE=$image_cache" >>"$GITHUB_ENV"
           echo "INSPECT_RANGES_BUILD_CACHE=$build_cache" >>"$GITHUB_ENV"
 
-      - name: Build the breakout CTF range
-        # Realizes evals/ctf's declared guest content (the ctf.breakout-web
-        # recipe) and captures it; the `range` sandbox provider refuses
-        # `range-not-built` for a provisioned range with no matching manifest,
-        # and this range has never been published, so it must build here.
-        working-directory: evals/ctf
-        run: |
-          uv run inspect-ranges build \
-            --image-cache "$INSPECT_RANGES_IMAGE_CACHE" \
-            --build-cache "$INSPECT_RANGES_BUILD_CACHE"
+      # No "build" step: the range is now topology-only (a benign neighbour and
+      # the attack box, no provisioning / services / plants), so `plan` resolves
+      # it immediately and the `range` provider boots it straight from the derived
+      # golden. A build manifest is only required for a range that declares guest
+      # content; `range-not-built` is raised only for such a range, never this one.
 
       - name: Require a model key
         # Fail cheaply, before any VM boot or model call, when the resolved
