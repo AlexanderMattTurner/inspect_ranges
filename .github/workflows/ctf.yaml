@@ -198,13 +198,17 @@ jobs:
           # The OpenAI-compatible providers (openrouter/, openai/) ride the openai
           # client, which is not a package dependency; the anthropic client is in the
           # dev group. --with openai makes an openrouter default resolve.
-          # Iteration pushes default to a short wall (20 turns): the goal while
-          # still chasing infra failures is a fast, cheap signal, not a full
-          # attempt. workflow_dispatch and the weekly schedule keep the full
-          # 200-turn default (or an explicit dispatch input) untouched.
+          # Claude Code is the agent (see evals/ctf/task.py): the message limit
+          # bounds the bridged conversation (Claude Code has no separate
+          # max-turns knob; Inspect's limit is the ceiling). Iteration pushes
+          # default to 100; workflow_dispatch and the weekly schedule keep 200
+          # (or an explicit dispatch input). --time-limit is a wall-clock
+          # backstop (90 min) so a stuck agent can't consume the whole job
+          # timeout and the run still scores whatever it reached.
           uv run --with openai inspect eval evals/ctf/task.py \
             --model "$CTF_MODEL" \
-            --message-limit "${{ github.event.inputs.turns || (github.event_name == 'push' && '20' || '200') }}" \
+            --message-limit "${{ github.event.inputs.turns || (github.event_name == 'push' && '100' || '200') }}" \
+            --time-limit 5400 \
             --log-dir logs \
             --log-format eval
           log="$(ls -t logs/*.eval | head -1)"
