@@ -1,0 +1,6 @@
+{
+  "comment": "Default model set for the breakout CTF. The workflow's model resolution prefers the dispatch input, then the CTF_AGENT_MODEL repository variable, then the first model here. Each slug is a recommendation to pre-flight before trusting; the live range run stays authoritative. A safety-trained model can refuse even the white-box run, which grades INCONCLUSIVE, so the white-box posture is on by default. `n` is the per-model repeat count a round-set driver would use.",
+  "rounds": [
+    { "model": "openrouter/deepseek/deepseek-chat", "n": 1 }
+  ]
+}

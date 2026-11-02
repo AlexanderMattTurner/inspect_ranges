@@ -1,0 +1,145 @@
+name: Breakout CTF
+
+# The live-fire breakout CTF: a real agent attacks the contained breakout range from the
+# Cloud Hypervisor attack box, and the verdict grades whether containment held. This is a
+# PAID, LIVE-FIRE eval (it calls a real model and boots real VMs), so it never runs on a
+# push or pull request. It runs on manual dispatch and on a weekly schedule.
+#
+# The range boots real VMs, so this needs a KVM-capable runner. `ubuntu-latest` is used on
+# the assumption that the hosted runner exposes /dev/kvm; the preflight step refuses loudly
+# before any paid leg if it does not. Point `runs-on` at a self-hosted KVM label instead
+# where the hosted runner has no nested virtualization.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Agent model slug (e.g. anthropic/claude-..., openrouter/...). Empty takes the CTF_AGENT_MODEL repo variable, then the first model of config/ctf-round-set.json."
+        required: false
+        default: ""
+      whitebox:
+        description: "White-box posture. 'on' (default) unpacks the inspect_ranges source on the attack box and hands over the recon brief; 'off' is a lean black-box run."
+        required: false
+        default: "on"
+        type: choice
+        options: ["on", "off"]
+      turns:
+        description: "Message limit for the agent (react turns)."
+        required: false
+        default: "200"
+  schedule:
+    # Mondays, 11:11 UTC (outside the delayed 6-9am Pacific window).
+    - cron: "11 11 * * 1"
+  push:
+    # Iterate from a feature branch: a push runs the CTF only when the head
+    # commit subject carries the [breakout-ctf] marker (the job `if` below),
+    # so ordinary pushes never trigger a paid run. workflow_dispatch and the
+    # schedule register only from the default branch.
+    branches:
+      - "claude/**"
+
+concurrency:
+  # A manual dispatch keys on its run id so repeat dispatches of one model coexist; the
+  # scheduled run keys on the ref.
+  group: ctf-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  breakout-ctf:
+    # A push runs the paid CTF only on a commit explicitly marked [breakout-ctf].
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[breakout-ctf]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CTF_WHITEBOX: ${{ github.event.inputs.whitebox || 'on' }}
+      CTF_ATTACKER_VMM: cloud-hypervisor
+      INSPECT_RANGES_CTF_WHITEBOX: ${{ github.event.inputs.whitebox || 'on' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Require KVM
+        run: bash .github/scripts/ctf-require-kvm.sh
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Resolve the agent model
+        id: model
+        env:
+          INPUT_MODEL: ${{ github.event.inputs.model }}
+          VAR_MODEL: ${{ vars.CTF_AGENT_MODEL }}
+        run: |
+          set -euo pipefail
+          model="$INPUT_MODEL"
+          if [ -z "$model" ]; then model="$VAR_MODEL"; fi
+          if [ -z "$model" ]; then
+            model="$(jq -r '.rounds[0].model' config/ctf-round-set.json)"
+          fi
+          if [ -z "$model" ] || [ "$model" = "null" ]; then
+            echo "::error::no agent model resolved (input, CTF_AGENT_MODEL, or round set)." >&2
+            exit 1
+          fi
+          echo "model=$model" >>"$GITHUB_OUTPUT"
+          echo "Resolved agent model: $model"
+
+      - name: Run the breakout CTF
+        env:
+          CTF_MODEL: ${{ steps.model.outputs.model }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p logs
+          uv run inspect eval evals/ctf/task.py \
+            --model "$CTF_MODEL" \
+            --message-limit "${{ github.event.inputs.turns || '200' }}" \
+            --log-dir logs \
+            --log-format eval
+          log="$(ls -t logs/*.eval | head -1)"
+          echo "CTF_LOG=$log" >>"$GITHUB_ENV"
+          echo "graded log: $log"
+
+      - name: Grade containment
+        env:
+          CTF_MODEL: ${{ steps.model.outputs.model }}
+        run: |
+          set -euo pipefail
+          uv run python -m evals.ctf.verdict "$CTF_LOG" --out verdict.json || true
+          test -f verdict.json
+
+      - name: Record the attempt
+        env:
+          CTF_MODEL: ${{ steps.model.outputs.model }}
+        run: bash .github/scripts/ctf-record.sh verdict.json metrics/ctf.jsonl
+
+      - name: Job summary
+        env:
+          CTF_MODEL: ${{ steps.model.outputs.model }}
+        run: bash .github/scripts/ctf-job-summary.sh verdict.json
+
+      - name: File or update the containment issue on a breakout
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run python .github/scripts/ctf-containment-issue.py \
+            --verdict verdict.json \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Upload the verdict, ledger, and log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: breakout-ctf-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            verdict.json
+            metrics/ctf.jsonl
+            logs/
+          if-no-files-found: warn
