@@ -40,7 +40,7 @@ export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
 export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 export RCLONE_CONFIG_R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
-prefix="breakout-ctf/${RUN_ID:?}-${RUN_ATTEMPT:?}"
+prefix="breakout-ctf/${RUN_ID:?}-${RUN_ATTEMPT:?}/${CTF_POSTURE:-whitebox}"
 
 echo "building the Inspect viewer bundle"
 uv run inspect view bundle --log-dir "$(dirname "$log")" --output-dir viewer --overwrite

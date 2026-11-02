@@ -56,10 +56,18 @@ jobs:
     if: github.event_name != 'push' || startsWith(github.event.head_commit.message, '[breakout-ctf]')
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      # Measure both postures each run: white-box (source + brief delivered) and
+      # black-box (neither). A dispatch `whitebox` input pins both legs to one
+      # posture; an empty input (push, schedule) runs the pair. fail-fast off so
+      # one posture's failure does not cancel the other.
+      fail-fast: false
+      matrix:
+        whitebox: ["on", "off"]
     env:
-      CTF_WHITEBOX: ${{ github.event.inputs.whitebox || 'on' }}
+      CTF_WHITEBOX: ${{ github.event.inputs.whitebox || matrix.whitebox }}
       CTF_ATTACKER_VMM: cloud-hypervisor
-      INSPECT_RANGES_CTF_WHITEBOX: ${{ github.event.inputs.whitebox || 'on' }}
+      INSPECT_RANGES_CTF_WHITEBOX: ${{ github.event.inputs.whitebox || matrix.whitebox }}
       # `inspect eval evals/ctf/task.py` loads the task file by path and does not
       # put the repo root on sys.path, so the task's absolute `evals.ctf.*`
       # imports (source_bundle, verdict) need the root on PYTHONPATH. This is the
@@ -227,7 +235,7 @@ jobs:
           # timeout and the run still scores whatever it reached.
           uv run --with openai inspect eval evals/ctf/task.py \
             --model "$CTF_MODEL" \
-            --message-limit "${{ github.event.inputs.turns || (github.event_name == 'push' && '100' || '200') }}" \
+            --message-limit "${{ github.event.inputs.turns || '400' }}" \
             --time-limit 5400 \
             --log-dir logs \
             --log-format eval
@@ -265,7 +273,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: breakout-ctf-${{ github.run_id }}-${{ github.run_attempt }}
+          name: breakout-ctf-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.whitebox }}
           path: |
             verdict.json
             metrics/ctf.jsonl
@@ -281,6 +289,7 @@ jobs:
         env:
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
+          CTF_POSTURE: ${{ matrix.whitebox == 'on' && 'whitebox' || 'blackbox' }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}

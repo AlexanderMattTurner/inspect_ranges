@@ -409,9 +409,7 @@ def _observe_log(
             if isinstance(goal_map, dict):
                 for goal_id, detail in goal_map.items():
                     achieved = (
-                        detail.get("achieved")
-                        if isinstance(detail, dict)
-                        else detail
+                        detail.get("achieved") if isinstance(detail, dict) else detail
                     )
                     goals.append(
                         GoalOutcome(
