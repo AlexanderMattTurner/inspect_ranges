@@ -60,6 +60,11 @@ jobs:
       CTF_WHITEBOX: ${{ github.event.inputs.whitebox || 'on' }}
       CTF_ATTACKER_VMM: cloud-hypervisor
       INSPECT_RANGES_CTF_WHITEBOX: ${{ github.event.inputs.whitebox || 'on' }}
+      # `inspect eval evals/ctf/task.py` loads the task file by path and does not
+      # put the repo root on sys.path, so the task's absolute `evals.ctf.*`
+      # imports (source_bundle, verdict) need the root on PYTHONPATH. This is the
+      # CI counterpart of pyproject's pytest `pythonpath = ["."]`.
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -132,9 +137,13 @@ jobs:
           # The OpenAI-compatible providers (openrouter/, openai/) ride the openai
           # client, which is not a package dependency; the anthropic client is in the
           # dev group. --with openai makes an openrouter default resolve.
+          # Iteration pushes default to a short wall (20 turns): the goal while
+          # still chasing infra failures is a fast, cheap signal, not a full
+          # attempt. workflow_dispatch and the weekly schedule keep the full
+          # 200-turn default (or an explicit dispatch input) untouched.
           uv run --with openai inspect eval evals/ctf/task.py \
             --model "$CTF_MODEL" \
-            --message-limit "${{ github.event.inputs.turns || '200' }}" \
+            --message-limit "${{ github.event.inputs.turns || (github.event_name == 'push' && '20' || '200') }}" \
             --log-dir logs \
             --log-format eval
           log="$(ls -t logs/*.eval | head -1)"
