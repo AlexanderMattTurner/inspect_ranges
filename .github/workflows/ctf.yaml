@@ -288,7 +288,22 @@ jobs:
             --verdict verdict.json \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-      - name: Upload the verdict, ledger, and log
+      - name: Build the Inspect viewer (self-contained HTML)
+        # A standalone HTML eval viewer, folded into the artifact below so a run is
+        # openable with no R2 and no secrets: download the artifact, unzip, open
+        # viewer/index.html in a browser for the full interactive transcript.
+        # `inspect view bundle` inlines everything into a static page.
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ -n "${CTF_LOG:-}" ] && [ -f "${CTF_LOG:-}" ]; then
+            uv run inspect view bundle --log-dir "$(dirname "$CTF_LOG")" --output-dir viewer --overwrite
+            echo "built viewer/ ($(du -sh viewer | cut -f1))"
+          else
+            echo "no CTF_LOG on disk; skipping viewer bundle"
+          fi
+
+      - name: Upload the verdict, ledger, log, and HTML viewer
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -297,6 +312,7 @@ jobs:
             verdict.json
             metrics/ctf.jsonl
             logs/
+            viewer/
           if-no-files-found: warn
 
       - name: Publish the eval log and viewer to R2
