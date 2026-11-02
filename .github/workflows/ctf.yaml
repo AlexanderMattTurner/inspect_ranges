@@ -77,6 +77,45 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
+      - name: Install image-build tooling (qemu-utils, libguestfs-tools)
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends qemu-utils libguestfs-tools
+
+      - name: Derive the ubuntu-noble golden
+        # The range's `web` host boots the `ubuntu-noble` catalog golden, which
+        # is empty on a fresh runner (the image cache is per-run, never
+        # restored). Fetch the vendor cloud image and derive the golden the
+        # same way design/spikes/kypo-build and ch-vmm do: hash what was
+        # downloaded (no fixed sha is published for the "current" alias), bundle
+        # the daemon, and derive. INSPECT_RANGES_IMAGE_CACHE/_BUILD_CACHE are
+        # exported for every later step (the build, and the eval's provider).
+        run: |
+          set -euo pipefail
+          image_cache="$RUNNER_TEMP/ir-cache/images"
+          build_cache="$RUNNER_TEMP/ir-cache/builds"
+          artifacts="$RUNNER_TEMP/ir-daemon-artifacts"
+          mkdir -p "$image_cache" "$build_cache"
+          vendor="$RUNNER_TEMP/noble-server-cloudimg-amd64.img"
+          curl -fsSL -o "$vendor" https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+          vendor_sha="$(sha256sum "$vendor" | cut -d' ' -f1)"
+          db_out="$(uv run inspect-ranges daemon-bundle -o "$artifacts")"
+          daemon_sha="$(echo "$db_out" | grep -o 'bundle sha256:[0-9a-f]*' | cut -d: -f2)"
+          uv run inspect-ranges images derive "$vendor" --sha256 "$vendor_sha" --name ubuntu-noble \
+            --image-cache "$image_cache" \
+            --daemon-bundle "$artifacts" --daemon-sha256 "$daemon_sha"
+          echo "INSPECT_RANGES_IMAGE_CACHE=$image_cache" >>"$GITHUB_ENV"
+          echo "INSPECT_RANGES_BUILD_CACHE=$build_cache" >>"$GITHUB_ENV"
+
+      - name: Build the breakout CTF range
+        # Realizes evals/ctf's declared guest content (the ctf.breakout-web
+        # recipe) and captures it; the `range` sandbox provider refuses
+        # `range-not-built` for a provisioned range with no matching manifest,
+        # and this range has never been published, so it must build here.
+        working-directory: evals/ctf
+        run: |
+          uv run inspect-ranges build \
+            --image-cache "$INSPECT_RANGES_IMAGE_CACHE" \
+            --build-cache "$INSPECT_RANGES_BUILD_CACHE"
+
       - name: Resolve the agent model
         id: model
         env:

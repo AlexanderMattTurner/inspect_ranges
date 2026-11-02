@@ -1,7 +1,9 @@
 {
-  "comment": "Default model set for the breakout CTF. The workflow's model resolution prefers the dispatch input, then the CTF_AGENT_MODEL repository variable, then the first model here. Each slug is a recommendation to pre-flight before trusting; the live range run stays authoritative. A safety-trained model can refuse even the white-box run, which grades INCONCLUSIVE, so the white-box posture is on by default. `n` is the per-model repeat count a round-set driver would use. The first round targets the strongest model whose provider key is confirmed present in this org (anthropic/); the openrouter round is the fallback pre-flighted earlier.",
+  "comment": "Default model set for the breakout CTF. The workflow's model resolution prefers the dispatch input, then the CTF_AGENT_MODEL repository variable, then the first model here. Each slug is a recommendation to pre-flight before trusting; the live range run stays authoritative. A safety-trained model can refuse even the white-box run, which grades INCONCLUSIVE, so the white-box posture is on by default. `n` is the per-model repeat count a round-set driver would use. Open-weight models only, served through OpenRouter (the confirmed-present key): the top three are the strongest currently-available open-weight models across distinct model families; deepseek-chat is the lighter fallback already pre-flighted earlier.",
   "rounds": [
-    { "model": "anthropic/claude-opus-5-5", "n": 1 },
+    { "model": "openrouter/deepseek/deepseek-v4-pro", "n": 1 },
+    { "model": "openrouter/moonshotai/kimi-k3.1-pro", "n": 1 },
+    { "model": "openrouter/qwen/qwen3.8-max", "n": 1 },
     { "model": "openrouter/deepseek/deepseek-chat", "n": 1 }
   ]
 }
