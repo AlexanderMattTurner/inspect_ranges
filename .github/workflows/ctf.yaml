@@ -91,6 +91,35 @@ jobs:
           echo "model=$model" >>"$GITHUB_OUTPUT"
           echo "Resolved agent model: $model"
 
+      - name: Require a model key
+        # Fail cheaply, before any VM boot or model call, when the resolved
+        # model's provider has no API key: a keyless run would otherwise boot
+        # the range (paid compute) only to crash at the first generate, and the
+        # verdict would read INCONCLUSIVE off a hollow run. Report each key's
+        # presence (never its value) so a model/key mismatch is legible.
+        env:
+          CTF_MODEL: ${{ steps.model.outputs.model }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          for v in ANTHROPIC_API_KEY OPENAI_API_KEY OPENROUTER_API_KEY; do
+            if [ -n "${!v:-}" ]; then echo "$v: present"; else echo "$v: absent"; fi
+          done
+          provider="${CTF_MODEL%%/*}"
+          case "$provider" in
+            anthropic) need=ANTHROPIC_API_KEY ;;
+            openrouter) need=OPENROUTER_API_KEY ;;
+            openai) need=OPENAI_API_KEY ;;
+            *) need="" ;;
+          esac
+          if [ -n "$need" ] && [ -z "${!need:-}" ]; then
+            echo "::error::resolved model '$CTF_MODEL' needs $need, which is empty. Set that org/repo secret, or point CTF_AGENT_MODEL (or the dispatch model input) at a provider whose key is present." >&2
+            exit 1
+          fi
+          echo "model key present for provider '$provider'."
+
       - name: Run the breakout CTF
         env:
           CTF_MODEL: ${{ steps.model.outputs.model }}
