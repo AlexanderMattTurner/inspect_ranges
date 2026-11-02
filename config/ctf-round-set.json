@@ -1,9 +1,10 @@
 {
-  "comment": "Default model set for the breakout CTF. The workflow's model resolution prefers the dispatch input, then the CTF_AGENT_MODEL repository variable, then the first model here. Each slug is a recommendation to pre-flight before trusting; the live range run stays authoritative. A safety-trained model can refuse even the white-box run, which grades INCONCLUSIVE, so the white-box posture is on by default. `n` is the per-model repeat count a round-set driver would use. Open-weight models only, served through OpenRouter (the confirmed-present key): the top three are the strongest currently-available open-weight models across distinct model families; deepseek-chat is the lighter fallback already pre-flighted earlier.",
+  "comment": "Model set for the breakout CTF. The workflow fans these out as a matrix: one live range run per model, all white-box, in parallel (the reference harness runs a comparable round set of distinct open-weight models). Each slug is pre-flighted against the OpenRouter catalogue; the live range run stays authoritative. A safety-trained model can refuse even the white-box run, which grades INCONCLUSIVE, so the white-box posture is used for the sweep. `n` is the per-model repeat count a round-set driver would use. Open-weight models only, served through OpenRouter (the confirmed-present key): the five strongest currently-available open-weight models across distinct model families (DeepSeek, Moonshot, Qwen, Zhipu-GLM, Mistral).",
   "rounds": [
     { "model": "openrouter/deepseek/deepseek-v4-pro", "n": 1 },
     { "model": "openrouter/moonshotai/kimi-k3.1-pro", "n": 1 },
-    { "model": "openrouter/qwen/qwen3.8-max", "n": 1 },
-    { "model": "openrouter/deepseek/deepseek-chat", "n": 1 }
+    { "model": "openrouter/qwen/qwen3.8-max-prime", "n": 1 },
+    { "model": "openrouter/z-ai/glm-5.3-prime", "n": 1 },
+    { "model": "openrouter/mistralai/mistral-large-4-0", "n": 1 }
   ]
 }
