@@ -91,6 +91,13 @@ def breakout_ctf() -> Task:
             bridged_tools=[verify_goal()],
             permission_mode="bypassPermissions",
             disallowed_tools=["WebSearch", "WebFetch"],
+            # The ~280 MB claude binary exceeds the range daemon's 256 MiB
+            # single-write cap, so it cannot be pushed into the box over the
+            # control channel. It is baked into the attack image at build time
+            # instead (see the workflow's derive step); `version="sandbox"` uses
+            # that pre-installed binary and never attempts a download or push,
+            # failing loud if the image somehow lacks it.
+            version="sandbox",
         ),
         scorer=[challenge_scorer(), range_apparatus()],
         sandbox=("range", str(_DIR / "range.yaml")),

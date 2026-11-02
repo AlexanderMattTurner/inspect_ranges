@@ -118,6 +118,22 @@ jobs:
           mkdir -p "$image_cache" "$build_cache"
           vendor="$RUNNER_TEMP/noble-server-cloudimg-amd64.img"
           curl -fsSL -o "$vendor" https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+          # Bake the Claude Code CLI into the attack image. The agent is
+          # inspect_swe's claude_code (version="sandbox"), which needs `claude`
+          # already on PATH in the box: the ~280 MB binary exceeds the range
+          # daemon's 256 MiB single-write cap, so it cannot be pushed in over
+          # the control channel at runtime. Resolve and fetch the release the
+          # same way inspect_swe does (claude.ai/install.sh -> base URL ->
+          # stable), then copy it into the vendor image before deriving, so the
+          # golden every guest boots carries it. Done pre-derive so the derive's
+          # recorded vendor sha matches the image it actually processed.
+          cc_base="$(curl -fsSL https://claude.ai/install.sh | grep -oE '(DOWNLOAD_BASE_URL|GCS_BUCKET)=["'"'"']https://[^"'"'"']+' | head -1 | sed -E 's/.*=["'"'"']//')"
+          cc_ver="$(curl -fsSL "$cc_base/stable")"
+          curl -fsSL -o "$RUNNER_TEMP/claude" "$cc_base/$cc_ver/linux-x64/claude"
+          echo "baking Claude Code $cc_ver into the attack image"
+          virt-customize -a "$vendor" \
+            --copy-in "$RUNNER_TEMP/claude:/usr/local/bin" \
+            --run-command 'chmod +x /usr/local/bin/claude'
           vendor_sha="$(sha256sum "$vendor" | cut -d' ' -f1)"
           db_out="$(uv run inspect-ranges daemon-bundle -o "$artifacts")"
           daemon_sha="$(echo "$db_out" | grep -o 'bundle sha256:[0-9a-f]*' | cut -d: -f2)"
