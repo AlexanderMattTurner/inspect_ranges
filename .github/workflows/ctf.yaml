@@ -303,32 +303,7 @@ jobs:
             echo "no CTF_LOG on disk; skipping viewer bundle"
           fi
 
-      - name: Stage the raw .eval at the workspace root
-        # Copy the native log to the root so the next step can upload it on its
-        # own, not nested under logs/ beside the evidence bundle.
-        if: always()
-        run: |
-          if [ -n "${CTF_LOG:-}" ] && [ -f "${CTF_LOG:-}" ]; then
-            cp "$CTF_LOG" "./$(basename "$CTF_LOG")"
-          fi
-
-      - name: Upload the .eval log (its own single-file artifact)
-        # The native Inspect .eval published directly as its own artifact: the
-        # download is a single-entry zip that extracts to just the .eval, with no
-        # bundle to dig through. (GitHub always serves artifacts as a zip, so it
-        # still unzips to the file; a truly un-zipped direct link would need a
-        # release asset or object storage.)
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: breakout-ctf-eval-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.slug.outputs.slug }}
-          path: "*.eval"
-          if-no-files-found: warn
-
-      - name: Upload the verdict, ledger, evidence, and HTML viewer
-        # Everything else, separate from the .eval above: the verdict, the metrics
-        # ledger, the out-of-guest evidence bundle, and the self-contained HTML
-        # viewer (open viewer/index.html). No external storage or credentials.
+      - name: Upload the verdict, ledger, log, and HTML viewer
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -336,9 +311,16 @@ jobs:
           path: |
             verdict.json
             metrics/ctf.jsonl
-            logs/*.evidence/**
+            logs/
             viewer/
           if-no-files-found: warn
+
+      # The run publishes nothing externally: the uploaded artifact above carries
+      # the raw .eval, the verdict, the ledger, and a self-contained HTML viewer
+      # (open viewer/index.html), so a run is fully inspectable with no external
+      # storage or credentials. An adopter who wants a durable link beyond the
+      # artifact's retention can add their own publish step against the uploaded
+      # viewer/ and .eval; the eval itself stays credential-free.
 
       - name: Gate on the containment verdict
         # The CI signal, after the verdict has recorded and uploaded.
