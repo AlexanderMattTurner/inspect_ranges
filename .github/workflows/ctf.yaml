@@ -46,7 +46,6 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   plan:
@@ -274,19 +273,8 @@ jobs:
           echo "verdict exit code: $rc"
           test -f verdict.json
 
-      - name: Record the attempt
-        run: bash .github/scripts/ctf-record.sh verdict.json metrics/ctf.jsonl
-
       - name: Job summary
         run: bash .github/scripts/ctf-job-summary.sh verdict.json
-
-      - name: File or update the containment issue on a breakout
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          uv run python .github/scripts/ctf-containment-issue.py \
-            --verdict verdict.json \
-            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - name: Build the Inspect viewer (self-contained HTML)
         # A standalone HTML eval viewer, folded into the artifact below so a run is
@@ -303,24 +291,23 @@ jobs:
             echo "no CTF_LOG on disk; skipping viewer bundle"
           fi
 
-      - name: Upload the verdict, ledger, log, and HTML viewer
+      - name: Upload the verdict, log, and HTML viewer
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: breakout-ctf-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.slug.outputs.slug }}
           path: |
             verdict.json
-            metrics/ctf.jsonl
             logs/
             viewer/
           if-no-files-found: warn
 
       # The run publishes nothing externally: the uploaded artifact above carries
-      # the raw .eval, the verdict, the ledger, and a self-contained HTML viewer
-      # (open viewer/index.html), so a run is fully inspectable with no external
-      # storage or credentials. An adopter who wants a durable link beyond the
-      # artifact's retention can add their own publish step against the uploaded
-      # viewer/ and .eval; the eval itself stays credential-free.
+      # the raw .eval, the verdict, and a self-contained HTML viewer (open
+      # viewer/index.html), so a run is fully inspectable with no external storage
+      # or credentials. An adopter who wants a durable link beyond the artifact's
+      # retention can add their own publish step against the uploaded viewer/ and
+      # .eval; the eval itself stays credential-free.
 
       - name: Gate on the containment verdict
         # The CI signal, after the verdict has recorded and uploaded.
